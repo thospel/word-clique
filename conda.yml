@@ -1,0 +1,13 @@
+name: word-clique
+channels:
+  - defaults
+dependencies:
+  - python>=3
+  - pip
+  - docopt
+  - rich
+  # tqdm
+  # Development only
+  - mypy
+  - autoflake
+  - safety
