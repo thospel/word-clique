@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+"""
+Usage:
+  word-clique1 [options] [<file>...]
+
+Options:
+  --unique FILE      Write anagram unique words to FILE
+  -h --help          Show this screen.
+  --version          Show version.
+"""
 import sys
 from pathlib import Path
 from operator import ior, iand
@@ -7,11 +16,15 @@ from itertools import accumulate
 from typing import Set, Dict, List
 from time import monotonic
 
+# External modules
+from docopt import docopt	# type: ignore
+from tqdm import tqdm
+
 FILENAME = Path("~/Downloads/words.txt").expanduser()
 WORD_LENGTH = 5
 DEBUG = True
 
-def analyze(filenames: List[Path], word_length) -> None:
+def analyze(filenames: List[Path], word_length, unifile: str = None) -> None:
     letter_set: Set[str] = set()
     cwords: Dict[str, List[str]] = {}
 
@@ -19,7 +32,7 @@ def analyze(filenames: List[Path], word_length) -> None:
     words_seen: Set[str] = set()
     for filename in filenames:
         with open(filename) as file:
-            for word in file:
+            for word in tqdm(file):
                 word = word.strip()
                 if len(word) != word_length or not word.isalpha():
                     continue
@@ -49,6 +62,11 @@ def analyze(filenames: List[Path], word_length) -> None:
     nr_bwords = len(bwords)
     assert nr_bwords == len(cwords)
     print(f"{len(words_seen)} words, {nr_bwords} unique anagrams", file = sys.stderr)
+    if unifile is not None:
+        with open(unifile, "w") as uni_handle:
+            for words in tqdm(cwords.values()):
+                print(words[0], file = uni_handle)
+
     # Starting with relatively isolated nodes is a LOT faster
     bword_keys = { bword: sum(b & bword == 0 for b in bwords) for bword in bwords}
     # print(bword_keys)
@@ -124,11 +142,11 @@ def analyze(filenames: List[Path], word_length) -> None:
 
     selected = [0] * nr_words
     print(f"Start after {start_time - base_time:4.1f}s", file = sys.stderr)
-    for i, bword in enumerate(bword_list):
+    for i, bword in enumerate(tqdm(bword_list)):
         # print(f"{monotonic()-start_time:7.1f}s: {i=}", file = sys.stderr)
         selected[0] = bword
         explore(0, selected, bword)
 
 if __name__ == '__main__':
-    sys.stdout.reconfigure(line_buffering = True)
-    analyze(sys.argv[1:] or [FILENAME], WORD_LENGTH)
+    args = docopt(__doc__, version=f"word-clique 1.000")
+    analyze(args["<file>"] or [FILENAME], WORD_LENGTH, unifile = args["--unique"])
