@@ -10,7 +10,7 @@ Options:
 """
 import sys
 from pathlib import Path
-from operator import ior, iand
+from operator import ior
 from functools import reduce
 from itertools import accumulate
 from typing import Set, Dict, List
@@ -76,8 +76,8 @@ def analyze(filenames: List[Path], word_length, unifile: str = None) -> None:
     base_time = monotonic()
     print(f"Prepare after {base_time - load_time:4.1f}s", file = sys.stderr)
     follows: Dict[int, List[List[int]]] = {}
-    bit_need = nr_words1 * word_length
-    empty = [[] for i in range(nr_words1)]
+    nr_words1 * word_length
+    [[] for i in range(nr_words1)]
     best_bits: Dict[str, Dict[str, int]] = {}
     for i, bword in enumerate(bword_list):
         # print("Checking", to_word(bword))

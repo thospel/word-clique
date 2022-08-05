@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+"""
+Usage:
+  word-clique1 [options] [<file>...]
+
+Options:
+  --unique FILE         Write anagram unique words to FILE
+  -l --length INT  Word length [Default: 5]
+  -h --help             Show this screen.
+  --version             Show version.
+"""
+import sys
+from pathlib import Path
+from operator import ior
+from functools import reduce
+from time import monotonic
+from dataclasses import dataclass, field
+from typing import Set, Dict, List, Iterable
+
+# External modules
+from docopt import docopt	# type: ignore
+from tqdm import tqdm		# type: ignore
+
+FILENAME = Path("~/Downloads/words.txt").expanduser()
+WORD_LENGTH = 5
+DEBUG = True
+
+@dataclass
+class Clique:
+    word_length: int = WORD_LENGTH
+    letter_set:	Set[str]         = field(init = False, default_factory = set)
+    cwords: Dict[str, List[str]] = field(init = False, default_factory = dict)
+    letters: str		 = field(init = False)
+    bwords: Dict[int, str]	 = field(init = False)
+    bword_list: List[int]	 = field(init = False)
+
+    @property
+    def nr_words(self) -> int:
+        return len(self.letter_set) // self.word_length
+
+    def ingest(self, files) -> None:
+        words_seen: Set[str] = set()
+        for file in files:
+            with open(file) as handle:
+                for word in tqdm(handle):
+                    word = word.strip()
+                    if len(word) != self.word_length or not word.isalpha():
+                        continue
+                    cset = set(word.lower())
+                    if len(cset) != self.word_length or word in words_seen:
+                        continue
+                    words_seen.add(word)
+                    cword = "".join(sorted(cset))
+                    if cword not in self.cwords:
+                        self.cwords[cword] = []
+                        self.letter_set |= cset
+                    self.cwords[cword].append(word)
+        print(f"{len(words_seen)} words, {len(self.cwords)} unique anagrams", file = sys.stderr)
+
+    def unique_to_file(self, unifile) -> None:
+        with open(unifile, "w") as uni_handle:
+            for words in tqdm(self.cwords.values()):
+                print(words[0], file = uni_handle)
+
+    def word_from_bits(self, bword: int) -> str:
+        return self.cwords[self.bwords[bword]][0]
+
+    def words_from_bits(self, bwords: Iterable[int]) -> List[str]:
+        return list(map(self.word_from_bits, bwords))
+
+    def pre_analyze(self) -> None:
+        self.letters = "".join(sorted(self.letter_set))
+        print(f"{len(self.letters)} letters:", self.letters, file=sys.stderr)
+
+        # Make a letter bitmap for all words
+        letter_bits = { letter: 1 << i for i, letter in enumerate(self.letters) }
+        self.bwords = { reduce(ior, (letter_bits[l] for l in cword)): cword for cword in self.cwords }
+        assert len(self.bwords) == len(self.cwords)
+
+        # Starting with relatively isolated nodes is faster
+        # Starting with very connected nodes is a disaster
+        bword_keys = { bword: sum(b & bword == 0 for b in self.bwords) for bword in self.bwords}
+        # print(bword_keys)
+        self.bword_list = sorted(self.bwords, key = lambda x: bword_keys[x])
+        # print(list(map(self.word_from_bits, self.bword_list)), sys=stderr)
+
+    def analyze(self, base_time: float = None) -> None:
+        if base_time is None:
+            base_time = monotonic()
+
+        nr_words = self.nr_words
+        selected = [0] * nr_words
+
+        def explore(i, candidates, used_letters):
+            i1 = i+1
+            left = nr_words - i1
+            loop = tqdm(candidates) if i == 0 else candidates
+            for j, bword in enumerate(loop):
+                selected[i] = bword
+                # print(f"{'  '*i}explore({i=}, {list(map(self.word_from_bits, selected[:i+1]))})")
+                if left == 0:
+                    elapsed = monotonic() - base_time
+                    print(f"{elapsed:7.1f}: {self.words_from_bits(selected)}")
+                    return
+
+                used = used_letters | bword
+                possible = [bword2 for bword2 in candidates[j+1:] if bword2 & used == 0]
+                if len(possible) < left:
+                    continue
+                explore(i1, possible, used)
+
+        explore(0, self.bword_list, 0)
+
+if __name__ == '__main__':
+    args = docopt(__doc__, version=f"word-clique 1.000")
+
+    start_time = monotonic()
+    clique = Clique(int(args["--length"]))
+
+    files = args["<file>"] or [FILENAME]
+    clique.ingest(files)
+    load_time = monotonic()
+    print(f"Load time: {load_time-start_time:.1f}s", file = sys.stderr)
+
+    unifile = args["--unique"]
+    if unifile is not None:
+        clique.unique_to_file(unifile)
+        unique_time = monotonic()
+        print(f"Write unique: {unique_time-load_time:.1f}s", file = sys.stderr)
+    else:
+        unique_time = load_time
+
+    clique.pre_analyze()
+    prepare_time = monotonic()
+    print(f"Prepare: {prepare_time-unique_time:.1f}s", file = sys.stderr)
+
+    clique.analyze(prepare_time)
+    finish_time = monotonic()
+    print(f"Finish: {finish_time-prepare_time:.1f}s", file = sys.stderr)

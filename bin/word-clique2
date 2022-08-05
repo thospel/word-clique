@@ -10,9 +10,8 @@ Options:
 """
 import sys
 from pathlib import Path
-from operator import ior, iand
+from operator import ior
 from functools import reduce
-from itertools import accumulate
 from typing import Set, Dict, List
 from time import monotonic
 
@@ -52,7 +51,7 @@ def analyze(filenames: List[Path], word_length, unifile: str = None) -> None:
     if nr_words <= 1:
         assert nr_words == 1
         raise NotImplementedError("{nr_words=} is not supported (and trivial)")
-    nr_words1 = nr_words - 1
+    nr_words - 1
     letter_bits = { letter: 1 << i for i, letter in enumerate(letters) }
     bwords = { reduce(ior, (letter_bits[l] for l in cword)): cword for cword in cwords }
 
