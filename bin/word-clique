@@ -59,7 +59,7 @@ class Clique:
                         self.cwords[cword] = []
                         self.letter_set |= cset
                     self.cwords[cword].append(word)
-        print(f"{len(words_seen)} words, {len(self.cwords)} unique anagrams", file = sys.stderr)
+        print(f"{len(words_seen)} words with {self.word_length} letters, {len(self.cwords)} unique anagrams", file = sys.stderr)
 
     def unique_to_file(self, unifile: str) -> None:
         with open(unifile, "w") as uni_handle:
@@ -90,6 +90,9 @@ class Clique:
         # print(list(map(self.word_from_bits, self.bword_list)), sys=stderr)
 
     def analyze(self, *, base_time: float = None, track = None) -> int:
+        if not self.bword_list:
+            return 0
+
         _base_time: float = monotonic() if base_time is None else base_time
 
         nr_words = self.nr_words
@@ -110,21 +113,21 @@ class Clique:
                     bits |= bword
                     if bits.bit_count() >= bits_needed:
                         break
-                # print(f"{j=} {left=}")
+                # print(f"{len(candidates)=} {j=} {left=}")
             else:
                 # for left == 0 all candidates will pass, so no need to test
                 j = 0
 
-            loop = track(range(len(candidates)-j), transient = True, update_period = 1.0, description = "") if i == 0 and track else range(len(candidates)-j)
+            loop = track(range(len(candidates)-j)) if i == 0 and track else range(len(candidates)-j)
             for j in loop:
                 bword = candidates[j]
                 selected[i] = bword
                 # print(f"{'  '*i}explore({i=}, {list(map(self.word_from_bits, selected[:i+1]))})")
                 if left == 0:
                     elapsed = monotonic() - _base_time
-                    print(f"{elapsed:7.1f}s: {self.words_from_bits(selected)}")
                     nr_solutions += 1
-                    return
+                    print(f"{elapsed:7.1f}s: {self.words_from_bits(selected)} {nr_solutions:6d}")
+                    continue
 
                 used = used_letters | bword
                 possible = [bword2 for bword2 in candidates[j+1:] if bword2 & used == 0]
@@ -162,6 +165,6 @@ if __name__ == '__main__':
     print(f"Prepare: {prepare_time-unique_time:.1f}s", file = sys.stderr)
 
     no_tracker = args["--no-tracker"]
-    n = clique.analyze(base_time = prepare_time, track = None if no_tracker else track)
+    n = clique.analyze(base_time = prepare_time, track = None if no_tracker else lambda x: track(x, transient = True, auto_refresh=False, description = ""))
     finish_time = monotonic()
     print(f"Finish: {finish_time-prepare_time:.1f}s, {n} solutions", file = sys.stderr)
