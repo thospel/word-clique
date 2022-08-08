@@ -5,11 +5,14 @@ Usage:
 
 Options:
   --unique FILE         Write anagram unique words to FILE
-  -l --length INT  Word length [Default: 5]
+  -l --length INT       Word length [Default: 5]
+  -U --unbuffered       Line buffered (not default buffered)
+  -T --no-tracker       No tracker
   -h --help             Show this screen.
   --version             Show version.
 """
 import sys
+import io
 from pathlib import Path
 from operator import ior
 from functools import reduce
@@ -86,22 +89,41 @@ class Clique:
         self.bword_list = sorted(self.bwords, key = lambda x: bword_keys[x])
         # print(list(map(self.word_from_bits, self.bword_list)), sys=stderr)
 
-    def analyze(self, *, base_time: float = None, track = None) -> None:
+    def analyze(self, *, base_time: float = None, track = None) -> int:
         _base_time: float = monotonic() if base_time is None else base_time
 
         nr_words = self.nr_words
         selected = [0] * nr_words
+        nr_solutions = 0
 
         def explore(i, candidates, used_letters):
+            nonlocal nr_solutions
             i1 = i+1
             left = nr_words - i1
-            loop = track(candidates) if i == 0 and track else candidates
-            for j, bword in enumerate(loop):
+
+            if left:
+                # Check how many letters we will get from the final words in the
+                # best case. No point checking candidates beyond that point
+                bits_needed = self.word_length * (left+1)
+                bits = 0
+                for j, bword in enumerate(reversed(candidates)):
+                    bits |= bword
+                    if bits.bit_count() >= bits_needed:
+                        break
+                # print(f"{j=} {left=}")
+            else:
+                # for left == 0 all candidates will pass, so no need to test
+                j = 0
+
+            loop = track(range(len(candidates)-j), transient = True, update_period = 1.0, description = "") if i == 0 and track else range(len(candidates)-j)
+            for j in loop:
+                bword = candidates[j]
                 selected[i] = bword
                 # print(f"{'  '*i}explore({i=}, {list(map(self.word_from_bits, selected[:i+1]))})")
                 if left == 0:
                     elapsed = monotonic() - _base_time
                     print(f"{elapsed:7.1f}s: {self.words_from_bits(selected)}")
+                    nr_solutions += 1
                     return
 
                 used = used_letters | bword
@@ -111,9 +133,13 @@ class Clique:
                 explore(i1, possible, used)
 
         explore(0, self.bword_list, 0)
+        return nr_solutions
 
 if __name__ == '__main__':
     args = docopt(__doc__, version=f"word-clique 1.000")
+
+    if args["--unbuffered"] and isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(line_buffering = True)
 
     start_time = monotonic()
     clique = Clique(int(args["--length"]))
@@ -135,6 +161,7 @@ if __name__ == '__main__':
     prepare_time = monotonic()
     print(f"Prepare: {prepare_time-unique_time:.1f}s", file = sys.stderr)
 
-    clique.analyze(base_time = prepare_time, track = track)
+    no_tracker = args["--no-tracker"]
+    n = clique.analyze(base_time = prepare_time, track = None if no_tracker else track)
     finish_time = monotonic()
-    print(f"Finish: {finish_time-prepare_time:.1f}s", file = sys.stderr)
+    print(f"Finish: {finish_time-prepare_time:.1f}s, {n} solutions", file = sys.stderr)
