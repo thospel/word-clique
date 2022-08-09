@@ -8,6 +8,7 @@ Options:
   -l --length INT       Word length [Default: 5]
   -U --unbuffered       Line buffered (not default buffered)
   -T --no-tracker       No tracker
+  --vowels              Only accept words with at least 1 vowel
   -h --help             Show this screen.
   --version             Show version.
 """
@@ -18,7 +19,7 @@ from operator import ior
 from functools import reduce
 from time import perf_counter as monotonic
 from dataclasses import dataclass, field
-from typing import Set, Dict, List, Iterable
+from typing import Set, Dict, List, Iterable, Final
 
 # External modules
 from docopt import docopt	# type: ignore
@@ -27,6 +28,7 @@ from rich.progress import track
 FILENAME = Path("~/Downloads/words.txt").expanduser()
 WORD_LENGTH = 5
 DEBUG = True
+VOWELS: Final = set("aeiouy")
 
 @dataclass
 class Clique:
@@ -41,7 +43,7 @@ class Clique:
     def nr_words(self) -> int:
         return len(self.letter_set) // self.word_length
 
-    def ingest(self, files: Iterable[str]) -> None:
+    def ingest(self, files: Iterable[str], vowels: bool = False) -> None:
         words_seen: Set[str] = set()
         for file in files:
             with open(file) as handle:
@@ -52,6 +54,8 @@ class Clique:
                         continue
                     cset = set(word.lower())
                     if len(cset) != self.word_length or word in words_seen:
+                        continue
+                    if vowels and not cset & VOWELS:
                         continue
                     words_seen.add(word)
                     cword = "".join(sorted(cset))
@@ -148,7 +152,7 @@ if __name__ == '__main__':
     clique = Clique(int(args["--length"]))
 
     files = args["<file>"] or [FILENAME]
-    clique.ingest(files)
+    clique.ingest(files, vowels = args["--vowels"])
     load_time = monotonic()
     print(f"Load time: {load_time-start_time:.1f}s", file = sys.stderr)
 
