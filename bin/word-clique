@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
 Usage:
-  word-clique1 [options] [<file>...]
+  word-clique [options] [<file>...]
 
 Options:
   --unique FILE         Write anagram unique words to FILE
   -l --length INT       Word length [Default: 5]
   -U --unbuffered       Line buffered (not default buffered)
-  -T --no-tracker       No tracker
+  -T --no-tracker       No progress tracker
   --vowels              Only accept words with at least 1 vowel
+
   -h --help             Show this screen.
   --version             Show version.
 """
@@ -25,7 +26,7 @@ from typing import Set, Dict, List, Iterable, Final
 from docopt import docopt	# type: ignore
 from rich.progress import track
 
-FILENAME = Path("~/Downloads/words.txt").expanduser()
+FILENAME = "words.txt"
 WORD_LENGTH = 5
 DEBUG = True
 VOWELS: Final = set("aeiouy")
@@ -80,6 +81,7 @@ class Clique:
     def pre_analyze(self, vowels: bool = False) -> None:
         self.letters = "".join(sorted(self.letter_set))
         print(f"{len(self.letters)} letters:", self.letters, file=sys.stderr)
+        print(f"Will search for {self.nr_words} {self.word_length}-letter words with {self.nr_words * self.word_length} unique letters", file=sys.stderr)
 
         # Make a letter bitmap for all words
         letter_bits = { letter: 1 << i for i, letter in enumerate(self.letters) }
