@@ -77,14 +77,32 @@ class Clique:
     def words_from_bits(self, bwords: Iterable[int]) -> List[str]:
         return list(map(self.word_from_bits, bwords))
 
-    def pre_analyze(self) -> None:
+    def pre_analyze(self, vowels: bool = False) -> None:
         self.letters = "".join(sorted(self.letter_set))
         print(f"{len(self.letters)} letters:", self.letters, file=sys.stderr)
 
         # Make a letter bitmap for all words
         letter_bits = { letter: 1 << i for i, letter in enumerate(self.letters) }
         self.bwords = { reduce(ior, (letter_bits[l] for l in cword)): cword for cword in self.cwords }
-        assert len(self.bwords) == len(self.cwords)
+
+        if vowels:
+            used_vowels = self.letter_set & VOWELS
+            max_vowels = len(used_vowels) + 1 - self.nr_words
+            if max_vowels < self.word_length:
+                if max_vowels < 1:
+                    print("Pruning all anagrams since not enough vowels exist",
+                          file = sys.stderr)
+                    self.bwords = {}
+                else:
+                    # Instead of removing excess bwords we could modify the
+                    # bwords generator which would be more efficient. I like
+                    # this better though. It avoids code duplication and is easy
+                    # to understand
+                    bvowels = reduce(ior, (letter_bits[l] for l in used_vowels))
+                    excess_vowels = [bword for bword, cword in self.bwords.items() if (bword & bvowels).bit_count() > max_vowels]
+                    print("Pruning %s anagram%s with too many vowels" % (len(excess_vowels), "" if len(excess_vowels) == 1 else "s"), file = sys.stderr)
+                    for bword in excess_vowels:
+                        del self.bwords[bword]
 
         # Starting with relatively isolated nodes is faster
         # Starting with very connected nodes is a disaster
@@ -151,8 +169,9 @@ if __name__ == '__main__':
     start_time = monotonic()
     clique = Clique(int(args["--length"]))
 
-    files = args["<file>"] or [FILENAME]
-    clique.ingest(files, vowels = args["--vowels"])
+    files: List[str] = args["<file>"] or [FILENAME]
+    vowels: bool = args["--vowels"]
+    clique.ingest(files, vowels = vowels)
     load_time = monotonic()
     print(f"Load time: {load_time-start_time:.1f}s", file = sys.stderr)
 
@@ -164,7 +183,7 @@ if __name__ == '__main__':
     else:
         unique_time = load_time
 
-    clique.pre_analyze()
+    clique.pre_analyze(vowels = vowels)
     prepare_time = monotonic()
     print(f"Prepare: {prepare_time-unique_time:.1f}s", file = sys.stderr)
 
