@@ -30,6 +30,7 @@ FILENAME = "words.txt"
 WORD_LENGTH = 5
 DEBUG = True
 VOWELS: Final = set("aeiouy")
+SECOND_SORT = 4
 
 @dataclass
 class Clique:
@@ -111,7 +112,12 @@ class Clique:
         bword_keys = { bword: sum(b & bword == 0 for b in self.bwords) for bword in self.bwords}
         # print(bword_keys)
         self.bword_list = sorted(self.bwords, key = lambda x: bword_keys[x])
-        # print(list(map(self.word_from_bits, self.bword_list)), sys=stderr)
+        for _ in range( SECOND_SORT):
+            bword_keys2 = { bword: next((bword_keys[self.bword_list[j]] for j in range(i, len(self.bword_list)) if bword & self.bword_list[j] == 0), 0) for i, bword in enumerate(self.bword_list, 1)}
+            self.bword_list.sort(key = lambda x: ( bword_keys[x], bword_keys2[x] ))
+            #for bword in self.bword_list:
+            #    print(f"{self.word_from_bits(bword)} {bword_keys[bword]} {bword_keys2[bword]}")
+            # print(list(map(self.word_from_bits, self.bword_list)), sys=stderr)
 
     def analyze(self, *, base_time: float = None, track = None) -> int:
         if not self.bword_list:
