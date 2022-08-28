@@ -39,7 +39,7 @@ class Clique:
     cwords: Dict[str, List[str]] = field(init = False, default_factory = dict)
     letters: str		 = field(init = False)
     bwords: Dict[int, str]	 = field(init = False)
-    bword_list: List[int]	 = field(init = False)
+    bword_list: Dict[int, List[int]]	 = field(init = False)
 
     @property
     def nr_words(self) -> int:
@@ -84,40 +84,43 @@ class Clique:
         print(f"{len(self.letters)} letters:", self.letters, file=sys.stderr)
         print(f"Will search for {self.nr_words} {self.word_length}-letter words with {self.nr_words * self.word_length} unique letters", file=sys.stderr)
 
-        # Make a letter bitmap for all words
-        letter_bits = { letter: 1 << i for i, letter in enumerate(self.letters) }
-        self.bwords = { reduce(ior, (letter_bits[l] for l in cword)): cword for cword in self.cwords }
-
-        if vowels:
-            used_vowels = self.letter_set & VOWELS
-            max_vowels = len(used_vowels) + 1 - self.nr_words
-            if max_vowels < self.word_length:
-                if max_vowels < 1:
-                    print("Pruning all anagrams since not enough vowels exist",
-                          file = sys.stderr)
-                    self.bwords = {}
+        # Which letter is most common?
+        letter_count = { l: 0 for l in self.letter_set }
+        cwords = self.cwords.copy()
+        for cword in cwords:
+            for letter in cword:
+                letter_count[letter] += 1
+        letter_cwords = {}
+        letter_order = dict(zip(self.letter_set, [len(self.letter_set)] * len(self.letter_set)))
+        while cwords:
+            max_count = max(letter_count.values())
+            letter = next(l for l in letter_count if letter_count[l] == max_count)
+            letter_order[letter] = len(letter_cwords)
+            print("letter", letter, "count", max_count, "cwords", len(cwords))
+            cwords1 = []
+            cwords2 = []
+            for cword in cwords:
+                if letter in cword:
+                    cwords1.append(cword)
+                    for l in cword:
+                        letter_count[l] -= 1
                 else:
-                    # Instead of removing excess bwords we could modify the
-                    # bwords generator which would be more efficient. I like
-                    # this better though. It avoids code duplication and is easy
-                    # to understand
-                    bvowels = reduce(ior, (letter_bits[l] for l in used_vowels))
-                    excess_vowels = [bword for bword, cword in self.bwords.items() if (bword & bvowels).bit_count() > max_vowels]
-                    print("Pruning %s anagram%s with too many vowels" % (len(excess_vowels), "" if len(excess_vowels) == 1 else "s"), file = sys.stderr)
-                    for bword in excess_vowels:
-                        del self.bwords[bword]
+                    cwords2.append(cword)
+            assert letter_count[letter] == 0
+            del letter_count[letter]
+            letter_cwords[letter] = cwords1
+            cwords = cwords2
+        letter_seq = sorted(letter_order.keys(), key = lambda x: letter_order[x])
+        
+        # Make a letter bitmap for all words
+        letter_bits = { letter: 1 << i for i, letter in enumerate(letter_seq) }
 
-        # Starting with relatively isolated nodes is faster
-        # Starting with very connected nodes is a disaster
-        bword_keys = { bword: sum(b & bword == 0 for b in self.bwords) for bword in self.bwords}
-        # print(bword_keys)
-        self.bword_list = sorted(self.bwords, key = lambda x: bword_keys[x])
-        for _ in range( SECOND_SORT):
-            bword_keys2 = { bword: next((bword_keys[self.bword_list[j]] for j in range(i, len(self.bword_list)) if bword & self.bword_list[j] == 0), 0) for i, bword in enumerate(self.bword_list, 1)}
-            self.bword_list.sort(key = lambda x: ( bword_keys[x], bword_keys2[x] ))
-            #for bword in self.bword_list:
-            #    print(f"{self.word_from_bits(bword)} {bword_keys[bword]} {bword_keys2[bword]}")
-            # print(list(map(self.word_from_bits, self.bword_list)), sys=stderr)
+        # Mapping from anagrams to bits
+        self.bwords = { reduce(ior, (letter_bits[l] for l in cword)): cword for cword in self.cwords }
+        rev_words = dict(zip(self.bwords.values(), self.bwords))
+        self.bword_list = { letter_bits[letter]: sorted(rev_words[cword] for cword in cwords) for letter, cwords in letter_cwords.items() }
+        # for bwords in self.bword_list.values():
+        #     print(self.words_from_bits(bwords))
 
     def generate(self, *, base_time: float = None, track = None) -> int:
         if not self.bword_list:
@@ -134,6 +137,8 @@ class Clique:
             i1 = i+1
             left = nr_words - i1
 
+            candidates = candidates.copy()
+            for 
             if left:
                 # Check how many letters we will get from the final words in the
                 # best case. No point checking candidates beyond that point
